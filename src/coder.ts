@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { appendLog } from './log';
 import { readJsonFile, writeJsonFile } from './state';
-import { CoderOutput, ResearcherOutput, RunState } from './types';
+import { CoderAttemptResult, CoderOutput, ResearcherOutput, RunState } from './types';
 
 function buildPrompt(researcherOutput: ResearcherOutput, retryIssues: string[] = []): string {
   const retrySection = retryIssues.length
@@ -79,6 +79,15 @@ function chooseFallbackExtension(kind: ResearcherOutput['candidateArtifact']['ki
   return 'txt';
 }
 
+function sanitizeArtifactFilename(filename: string, kind: ResearcherOutput['candidateArtifact']['kind']): string {
+  const trimmed = filename.trim();
+  const base = path.basename(trimmed);
+  if (!base || base === '.' || base === '..') {
+    return `artifact.${chooseFallbackExtension(kind)}`;
+  }
+  return base;
+}
+
 function validateCoderOutput(parsed: CoderOutput, researcherOutput: ResearcherOutput): void {
   if (!parsed.artifactCode?.trim()) {
     throw new Error('Coder produced empty artifactCode');
@@ -112,11 +121,47 @@ function resetOutputDir(outputDir: string): void {
   fs.mkdirSync(outputDir, { recursive: true });
 }
 
+function runClaudeAttempt(prompt: string): CoderAttemptResult {
+  const result = spawnSync('claude', ['--permission-mode', 'bypassPermissions', '--print', prompt], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    timeout: 120000,
+    maxBuffer: 1024 * 1024 * 4
+  });
+
+  const stderr = result.stderr.trim();
+  const stdout = result.stdout.trim();
+
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      error: stderr || `claude exited with code ${result.status}`,
+      stderr,
+      stdoutPreview: stdout.slice(0, 800),
+      exitCode: result.status
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(extractJson(stdout)) as CoderOutput;
+    return { ok: true, output: parsed, stdoutPreview: stdout.slice(0, 800), exitCode: result.status };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      stderr,
+      stdoutPreview: stdout.slice(0, 800),
+      exitCode: result.status
+    };
+  }
+}
+
 export function runCoder(runStatePath = 'state/run.json', retryIssues: string[] = []): CoderOutput {
   const runStateAbsolutePath = path.resolve(runStatePath);
   const runState = readJsonFile<RunState>(runStateAbsolutePath);
   const researcherOutput = readJsonFile<ResearcherOutput>(path.resolve('state/researcher-output.json'));
   const startedAt = new Date().toISOString();
+  const prompt = buildPrompt(researcherOutput, retryIssues);
 
   runState.pipeline.status = 'coder-running';
   runState.pipeline.iterationCount += 1;
@@ -128,32 +173,89 @@ export function runCoder(runStatePath = 'state/run.json', retryIssues: string[] 
   }
   writeJsonFile(runStateAbsolutePath, runState);
   appendLog('agent-started', { runId: runState.runId, agent: 'coder', retryCount: runState.coder.retryCount });
-
-  const result = spawnSync('claude', ['--permission-mode', 'bypassPermissions', '--print', buildPrompt(researcherOutput, retryIssues)], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    timeout: 120000,
-    maxBuffer: 1024 * 1024 * 4
+  writeJsonFile(path.resolve('state/coder-prompt.json'), {
+    runId: runState.runId,
+    retryIssues,
+    prompt
   });
 
-  if (result.status !== 0) {
+  const firstAttempt = runClaudeAttempt(prompt);
+  let finalAttempt = firstAttempt;
+
+  if (!firstAttempt.ok && retryIssues.length === 0) {
+    appendLog('handoff', {
+      runId: runState.runId,
+      from: 'coder',
+      to: 'coder',
+      reason: 'retry-after-raw-coder-failure',
+      error: firstAttempt.error,
+      exitCode: firstAttempt.exitCode
+    });
+    runState.coder.retryCount += 1;
+    writeJsonFile(runStateAbsolutePath, runState);
+    finalAttempt = runClaudeAttempt(prompt);
+  }
+
+  if (!finalAttempt.ok || !finalAttempt.output) {
     runState.coder.status = 'failed';
     runState.coder.completedAt = new Date().toISOString();
-    runState.coder.error = result.stderr.trim() || `claude exited with code ${result.status}`;
+    runState.coder.error = finalAttempt.error ?? 'Coder failed';
     runState.pipeline.status = 'needs-human';
     writeJsonFile(runStateAbsolutePath, runState);
-    appendLog('agent-failed', { runId: runState.runId, agent: 'coder', error: runState.coder.error });
+    writeJsonFile(path.resolve('state/coder-error.json'), {
+      runId: runState.runId,
+      error: finalAttempt.error,
+      stderr: finalAttempt.stderr ?? '',
+      stdoutPreview: finalAttempt.stdoutPreview ?? '',
+      exitCode: finalAttempt.exitCode ?? null,
+      retryCount: runState.coder.retryCount
+    });
+    appendLog('agent-failed', {
+      runId: runState.runId,
+      agent: 'coder',
+      error: runState.coder.error,
+      exitCode: finalAttempt.exitCode ?? null,
+      retryCount: runState.coder.retryCount
+    });
     throw new Error(runState.coder.error ?? 'Coder failed');
   }
 
-  const parsed = JSON.parse(extractJson(result.stdout)) as CoderOutput;
-  validateCoderOutput(parsed, researcherOutput);
+  const parsed = finalAttempt.output;
+  parsed.artifactFilename = sanitizeArtifactFilename(
+    parsed.artifactFilename || `artifact.${chooseFallbackExtension(researcherOutput.candidateArtifact.kind)}`,
+    researcherOutput.candidateArtifact.kind
+  );
+
+  try {
+    validateCoderOutput(parsed, researcherOutput);
+  } catch (error) {
+    runState.coder.status = 'failed';
+    runState.coder.completedAt = new Date().toISOString();
+    runState.coder.error = error instanceof Error ? error.message : String(error);
+    runState.pipeline.status = 'needs-human';
+    writeJsonFile(runStateAbsolutePath, runState);
+    writeJsonFile(path.resolve('state/coder-error.json'), {
+      runId: runState.runId,
+      error: runState.coder.error,
+      stderr: finalAttempt.stderr ?? '',
+      stdoutPreview: finalAttempt.stdoutPreview ?? '',
+      exitCode: finalAttempt.exitCode ?? null,
+      retryCount: runState.coder.retryCount
+    });
+    appendLog('agent-failed', {
+      runId: runState.runId,
+      agent: 'coder',
+      error: runState.coder.error,
+      exitCode: finalAttempt.exitCode ?? null,
+      retryCount: runState.coder.retryCount
+    });
+    throw error;
+  }
 
   const outputDir = path.resolve('output', runState.runId);
   resetOutputDir(outputDir);
 
-  const artifactFilename = parsed.artifactFilename?.trim() || `artifact.${chooseFallbackExtension(researcherOutput.candidateArtifact.kind)}`;
-  const artifactPath = path.join(outputDir, artifactFilename);
+  const artifactPath = path.join(outputDir, parsed.artifactFilename);
   fs.writeFileSync(artifactPath, parsed.artifactCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), parsed.readme);
   fs.writeFileSync(path.join(outputDir, 'CASE_STUDY.md'), parsed.caseStudy);
@@ -170,8 +272,5 @@ export function runCoder(runStatePath = 'state/run.json', retryIssues: string[] 
     retryCount: runState.coder.retryCount
   });
 
-  return {
-    ...parsed,
-    artifactFilename
-  };
+  return parsed;
 }
