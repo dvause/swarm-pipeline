@@ -3,6 +3,7 @@ import { runCoder } from '../src/coder';
 import { appendLog } from '../src/log';
 import { evaluateKillSwitch } from '../src/killSwitch';
 import { runResearcher } from '../src/researcher';
+import { runReviewer } from '../src/reviewer';
 import { buildInitialRunState, readJsonFile, writeJsonFile } from '../src/state';
 import { InputSpec } from '../src/types';
 
@@ -40,12 +41,14 @@ function main(): void {
 
   const researcherOutput = runResearcher(inputPath, runStatePath);
   const coderOutput = runCoder(runStatePath);
+  const reviewerOutput = runReviewer(runStatePath);
 
   console.log(`Bootstrapped ${state.runId}`);
   console.log(`Input type: ${input.type}`);
   console.log(`Goal: ${input.goal}`);
   console.log(`Researcher artifact kind: ${researcherOutput.candidateArtifact.kind}`);
   console.log(`Coder artifact file: ${coderOutput.artifactFilename}`);
+  console.log(`Reviewer passed: ${reviewerOutput.passed} (score: ${reviewerOutput.score})`);
   console.log('Kill switch: not triggered');
 }
 

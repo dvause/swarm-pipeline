@@ -7,7 +7,8 @@
     "dev": "ts-node orchestrator/index.ts",
     "check": "tsc --noEmit",
     "research": "ts-node agents/researcher/index.ts",
-    "codegen": "ts-node -e \"require('./src/coder').runCoder()\""
+    "codegen": "ts-node -e \"require('./src/coder').runCoder()\"",
+    "review": "ts-node agents/reviewer/index.ts"
   },
   "keywords": [],
   "author": "",

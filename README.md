@@ -21,3 +21,4 @@ npm run research -- input/sample.json
 - `state/log.jsonl` — append-only lifecycle log
 - `state/researcher-output.json` — normalized findings for the next agent
 - `output/<runId>/` — generated artifact, README, case study, and grounding metadata
+- `state/reviewer-output.json` — deterministic validation results for the latest run
