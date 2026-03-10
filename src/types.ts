@@ -76,9 +76,17 @@ export interface ResearcherOutput {
   nextAction: string;
 }
 
+export interface CoderGrounding {
+  artifactReason: string;
+  constraintsAddressed: string[];
+  acceptanceChecks: string[];
+  tradeoffs: string[];
+}
+
 export interface CoderOutput {
   artifactFilename: string;
   artifactCode: string;
   readme: string;
   caseStudy: string;
+  grounding: CoderGrounding;
 }

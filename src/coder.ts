@@ -8,21 +8,30 @@ import { CoderOutput, ResearcherOutput, RunState } from './types';
 function buildPrompt(researcherOutput: ResearcherOutput): string {
   return [
     'You are generating the smallest useful portfolio artifact for a local repo.',
+    'You must stay tightly grounded in the researcher output. Do not invent a random demo.',
     'Return ONLY valid JSON. No markdown fences. No explanation.',
     'Required JSON shape:',
     '{',
     '  "artifactFilename": string,',
     '  "artifactCode": string,',
     '  "readme": string,',
-    '  "caseStudy": string',
+    '  "caseStudy": string,',
+    '  "grounding": {',
+    '    "artifactReason": string,',
+    '    "constraintsAddressed": string[],',
+    '    "acceptanceChecks": string[],',
+    '    "tradeoffs": string[]',
+    '  }',
     '}',
     '',
-    'Constraints:',
-    '- Produce a tiny runnable artifact',
+    'Hard requirements:',
+    '- The artifact must directly satisfy the stated goal',
+    '- The artifact kind should match candidateArtifact.kind unless there is a strong reason not to',
     '- Keep dependencies minimal or zero',
-    '- README must include a run command',
-    '- Case study must include problem, approach, output, and why it matters',
+    '- README must include a run command and explain why this artifact was chosen',
+    '- Case study must include problem, approach, output, tradeoffs, and why it matters',
     '- Prefer a single-file script when possible',
+    '- If the input is underspecified, choose the smallest artifact that still matches the goal and explain the tradeoff explicitly',
     '',
     'Researcher output:',
     JSON.stringify(researcherOutput, null, 2)
@@ -59,6 +68,34 @@ function chooseFallbackExtension(kind: ResearcherOutput['candidateArtifact']['ki
   return 'txt';
 }
 
+function validateCoderOutput(parsed: CoderOutput, researcherOutput: ResearcherOutput): void {
+  if (!parsed.artifactCode?.trim()) {
+    throw new Error('Coder produced empty artifactCode');
+  }
+
+  if (!parsed.readme?.includes('```bash')) {
+    throw new Error('Coder README is missing a bash run block');
+  }
+
+  if (!parsed.caseStudy?.toLowerCase().includes('tradeoff')) {
+    throw new Error('Coder case study is missing tradeoff discussion');
+  }
+
+  if (!parsed.grounding?.artifactReason?.trim()) {
+    throw new Error('Coder output is missing grounding.artifactReason');
+  }
+
+  if (!Array.isArray(parsed.grounding.constraintsAddressed) || parsed.grounding.constraintsAddressed.length === 0) {
+    throw new Error('Coder output is missing grounding.constraintsAddressed');
+  }
+
+  const expectedKind = researcherOutput.candidateArtifact.kind;
+  const filename = parsed.artifactFilename.toLowerCase();
+  if (expectedKind === 'script' && !(/\.(py|js|ts|sh)$/.test(filename))) {
+    throw new Error(`Expected script-like artifact filename, got ${parsed.artifactFilename}`);
+  }
+}
+
 export function runCoder(runStatePath = 'state/run.json'): CoderOutput {
   const runStateAbsolutePath = path.resolve(runStatePath);
   const runState = readJsonFile<RunState>(runStateAbsolutePath);
@@ -91,6 +128,8 @@ export function runCoder(runStatePath = 'state/run.json'): CoderOutput {
   }
 
   const parsed = JSON.parse(extractJson(result.stdout)) as CoderOutput;
+  validateCoderOutput(parsed, researcherOutput);
+
   const outputDir = path.resolve('output', runState.runId);
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -99,6 +138,7 @@ export function runCoder(runStatePath = 'state/run.json'): CoderOutput {
   fs.writeFileSync(artifactPath, parsed.artifactCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), parsed.readme);
   fs.writeFileSync(path.join(outputDir, 'CASE_STUDY.md'), parsed.caseStudy);
+  fs.writeFileSync(path.join(outputDir, 'GROUNDING.json'), JSON.stringify(parsed.grounding, null, 2) + '\n');
 
   runState.coder.status = 'done';
   runState.coder.completedAt = new Date().toISOString();
