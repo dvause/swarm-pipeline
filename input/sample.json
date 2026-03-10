@@ -1,0 +1,9 @@
+{
+  "type": "prompt",
+  "source": "internal",
+  "goal": "Generate a tiny runnable artifact plus README and case-study for a simple data utility.",
+  "notes": [
+    "This is a Day 1 placeholder input.",
+    "Real researcher/coder/reviewer flows come later."
+  ]
+}
