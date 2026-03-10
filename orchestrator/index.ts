@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { runCoder } from '../src/coder';
 import { appendLog } from '../src/log';
 import { evaluateKillSwitch } from '../src/killSwitch';
 import { runResearcher } from '../src/researcher';
@@ -38,11 +39,13 @@ function main(): void {
   });
 
   const researcherOutput = runResearcher(inputPath, runStatePath);
+  const coderOutput = runCoder(runStatePath);
 
   console.log(`Bootstrapped ${state.runId}`);
   console.log(`Input type: ${input.type}`);
   console.log(`Goal: ${input.goal}`);
   console.log(`Researcher artifact kind: ${researcherOutput.candidateArtifact.kind}`);
+  console.log(`Coder artifact file: ${coderOutput.artifactFilename}`);
   console.log('Kill switch: not triggered');
 }
 

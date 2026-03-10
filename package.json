@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "ts-node orchestrator/index.ts",
     "check": "tsc --noEmit",
-    "research": "ts-node agents/researcher/index.ts"
+    "research": "ts-node agents/researcher/index.ts",
+    "codegen": "ts-node -e \"require('./src/coder').runCoder()\""
   },
   "keywords": [],
   "author": "",

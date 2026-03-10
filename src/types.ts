@@ -75,3 +75,10 @@ export interface ResearcherOutput {
   questions: string[];
   nextAction: string;
 }
+
+export interface CoderOutput {
+  artifactFilename: string;
+  artifactCode: string;
+  readme: string;
+  caseStudy: string;
+}
