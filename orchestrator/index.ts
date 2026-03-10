@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { appendLog } from '../src/log';
 import { evaluateKillSwitch } from '../src/killSwitch';
+import { runResearcher } from '../src/researcher';
 import { buildInitialRunState, readJsonFile, writeJsonFile } from '../src/state';
 import { InputSpec } from '../src/types';
 
@@ -36,9 +37,12 @@ function main(): void {
     triggered: false
   });
 
+  const researcherOutput = runResearcher(inputPath, runStatePath);
+
   console.log(`Bootstrapped ${state.runId}`);
   console.log(`Input type: ${input.type}`);
   console.log(`Goal: ${input.goal}`);
+  console.log(`Researcher artifact kind: ${researcherOutput.candidateArtifact.kind}`);
   console.log('Kill switch: not triggered');
 }
 

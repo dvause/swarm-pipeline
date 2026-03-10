@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node orchestrator/index.ts",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "research": "ts-node agents/researcher/index.ts"
   },
   "keywords": [],
   "author": "",

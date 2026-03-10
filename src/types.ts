@@ -59,3 +59,19 @@ export interface InputSpec {
   goal: string;
   notes?: string[];
 }
+
+export interface ResearcherOutput {
+  inputType: InputSpec['type'];
+  source: string;
+  goal: string;
+  summary: string;
+  candidateArtifact: {
+    kind: 'script' | 'app' | 'service' | 'config' | 'unknown';
+    rationale: string;
+  };
+  inputs: string[];
+  outputs: string[];
+  constraints: string[];
+  questions: string[];
+  nextAction: string;
+}

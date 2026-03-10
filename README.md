@@ -1,16 +1,22 @@
 # swarm-pipeline
 
-A small orchestrated pipeline for generating portfolio-ready artifacts with agent handoffs. The Day 1 skeleton boots from a simple input file, writes shared run state, records a log entry, checks kill-switch rules, and exits cleanly.
+A small orchestrated pipeline for generating portfolio-ready artifacts with agent handoffs. Current state: the Day 1/2 skeleton boots from a simple input file, writes shared run state, records a log, runs the researcher agent, and exits cleanly.
 
-## Run
+## Run orchestrator
 
 ```bash
 npm install
 npm run dev
 ```
 
-Optional custom input:
+## Run researcher directly
 
 ```bash
-npm run dev -- input/sample.json
+npm run research -- input/sample.json
 ```
+
+## Output so far
+
+- `state/run.json` — shared runtime state
+- `state/log.jsonl` — append-only lifecycle log
+- `state/researcher-output.json` — normalized findings for the next agent
