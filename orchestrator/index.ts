@@ -40,8 +40,21 @@ function main(): void {
   });
 
   const researcherOutput = runResearcher(inputPath, runStatePath);
-  const coderOutput = runCoder(runStatePath);
-  const reviewerOutput = runReviewer(runStatePath);
+  let coderOutput = runCoder(runStatePath);
+  let reviewerOutput = runReviewer(runStatePath);
+
+  if (!reviewerOutput.passed) {
+    appendLog('handoff', {
+      runId: state.runId,
+      from: 'reviewer',
+      to: 'coder',
+      reason: 'retry-after-review-failure',
+      issues: reviewerOutput.issues
+    });
+
+    coderOutput = runCoder(runStatePath, reviewerOutput.issues);
+    reviewerOutput = runReviewer(runStatePath);
+  }
 
   console.log(`Bootstrapped ${state.runId}`);
   console.log(`Input type: ${input.type}`);
@@ -49,7 +62,12 @@ function main(): void {
   console.log(`Researcher artifact kind: ${researcherOutput.candidateArtifact.kind}`);
   console.log(`Coder artifact file: ${coderOutput.artifactFilename}`);
   console.log(`Reviewer passed: ${reviewerOutput.passed} (score: ${reviewerOutput.score})`);
+  console.log(`Coder retries used: ${reviewerOutput.passed ? readJsonFile<any>(runStatePath).coder.retryCount : 'n/a'}`);
   console.log('Kill switch: not triggered');
+
+  if (!reviewerOutput.passed) {
+    process.exit(1);
+  }
 }
 
 main();

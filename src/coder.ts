@@ -5,7 +5,17 @@ import { appendLog } from './log';
 import { readJsonFile, writeJsonFile } from './state';
 import { CoderOutput, ResearcherOutput, RunState } from './types';
 
-function buildPrompt(researcherOutput: ResearcherOutput): string {
+function buildPrompt(researcherOutput: ResearcherOutput, retryIssues: string[] = []): string {
+  const retrySection = retryIssues.length
+    ? [
+        '',
+        'Reviewer feedback from the previous failed attempt:',
+        ...retryIssues.map((issue, index) => `${index + 1}. ${issue}`),
+        '',
+        'You must fix these issues in this attempt.'
+      ].join('\n')
+    : '';
+
   return [
     'You are generating the smallest useful portfolio artifact for a local repo.',
     'You must stay tightly grounded in the researcher output. Do not invent a random demo.',
@@ -32,6 +42,7 @@ function buildPrompt(researcherOutput: ResearcherOutput): string {
     '- Case study must include problem, approach, output, tradeoffs, and why it matters',
     '- Prefer a single-file script when possible',
     '- If the input is underspecified, choose the smallest artifact that still matches the goal and explain the tradeoff explicitly',
+    retrySection,
     '',
     'Researcher output:',
     JSON.stringify(researcherOutput, null, 2)
@@ -96,7 +107,12 @@ function validateCoderOutput(parsed: CoderOutput, researcherOutput: ResearcherOu
   }
 }
 
-export function runCoder(runStatePath = 'state/run.json'): CoderOutput {
+function resetOutputDir(outputDir: string): void {
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  fs.mkdirSync(outputDir, { recursive: true });
+}
+
+export function runCoder(runStatePath = 'state/run.json', retryIssues: string[] = []): CoderOutput {
   const runStateAbsolutePath = path.resolve(runStatePath);
   const runState = readJsonFile<RunState>(runStateAbsolutePath);
   const researcherOutput = readJsonFile<ResearcherOutput>(path.resolve('state/researcher-output.json'));
@@ -107,10 +123,13 @@ export function runCoder(runStatePath = 'state/run.json'): CoderOutput {
   runState.coder.status = 'running';
   runState.coder.startedAt = startedAt;
   runState.coder.error = null;
+  if (retryIssues.length > 0) {
+    runState.coder.retryCount += 1;
+  }
   writeJsonFile(runStateAbsolutePath, runState);
-  appendLog('agent-started', { runId: runState.runId, agent: 'coder' });
+  appendLog('agent-started', { runId: runState.runId, agent: 'coder', retryCount: runState.coder.retryCount });
 
-  const result = spawnSync('claude', ['--permission-mode', 'bypassPermissions', '--print', buildPrompt(researcherOutput)], {
+  const result = spawnSync('claude', ['--permission-mode', 'bypassPermissions', '--print', buildPrompt(researcherOutput, retryIssues)], {
     cwd: process.cwd(),
     encoding: 'utf8',
     timeout: 120000,
@@ -131,7 +150,7 @@ export function runCoder(runStatePath = 'state/run.json'): CoderOutput {
   validateCoderOutput(parsed, researcherOutput);
 
   const outputDir = path.resolve('output', runState.runId);
-  fs.mkdirSync(outputDir, { recursive: true });
+  resetOutputDir(outputDir);
 
   const artifactFilename = parsed.artifactFilename?.trim() || `artifact.${chooseFallbackExtension(researcherOutput.candidateArtifact.kind)}`;
   const artifactPath = path.join(outputDir, artifactFilename);
@@ -143,9 +162,13 @@ export function runCoder(runStatePath = 'state/run.json'): CoderOutput {
   runState.coder.status = 'done';
   runState.coder.completedAt = new Date().toISOString();
   runState.coder.costUsd = 0;
-  runState.pipeline.status = 'complete';
   writeJsonFile(runStateAbsolutePath, runState);
-  appendLog('agent-completed', { runId: runState.runId, agent: 'coder', outputDir: path.relative(process.cwd(), outputDir) });
+  appendLog('agent-completed', {
+    runId: runState.runId,
+    agent: 'coder',
+    outputDir: path.relative(process.cwd(), outputDir),
+    retryCount: runState.coder.retryCount
+  });
 
   return {
     ...parsed,
