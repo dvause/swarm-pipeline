@@ -22,3 +22,4 @@ npm run research -- input/sample.json
 - `state/researcher-output.json` — normalized findings for the next agent
 - `output/<runId>/` — generated artifact, README, case study, and grounding metadata
 - `state/reviewer-output.json` — deterministic validation results for the latest run
+- `state/coder-prompt.json` / `state/coder-error.json` — coder diagnostics when Claude misbehaves

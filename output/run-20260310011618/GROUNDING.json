@@ -1,0 +1,20 @@
+{
+  "artifactReason": "The researcher specified a CSV input at input/sample-players.csv and requested a runnable utility producing a summary report. A single-file Python script with stdlib only is the smallest artifact satisfying that goal. The previous attempt failed due to a relative-path bug; this version resolves the input path via __file__ making it location-independent.",
+  "constraintsAddressed": [
+    "Keep scope minimal and runnable — single file, zero dependencies",
+    "Optimize for reproducible portfolio evidence — path resolved relative to script so it runs from any CWD",
+    "No UI unless explicitly requested — stdout only",
+    "Prefer local file processing over infrastructure — reads local CSV, no network calls"
+  ],
+  "acceptanceChecks": [
+    "Script executes without error when run from its own directory",
+    "Output includes per-position grouping with top scorer and average",
+    "Overall top scorer and average are printed",
+    "No pip install required"
+  ],
+  "tradeoffs": [
+    "Stdout only (no output file) keeps it simple; easily extended with argparse --output if needed",
+    "stdlib csv vs pandas: pandas is cleaner for aggregation but adds a dependency; 8 rows does not justify it",
+    "No CLI arguments: input path is hardcoded relative to __file__; acceptable for a portfolio demo script"
+  ]
+}
