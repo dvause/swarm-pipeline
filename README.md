@@ -24,3 +24,25 @@ npm run research -- input/sample.json
 - `state/reviewer-output.json` — deterministic validation results for the latest run
 - `state/coder-prompt.json` / `state/coder-error.json` — coder diagnostics when Claude misbehaves
 - `output/<runId>/RUN_SUMMARY.json` — machine-readable run summary (status, per-step timing, artifacts, verdicts)
+
+## Troubleshooting — Claude CLI
+
+This pipeline uses the `claude` command-line tool for the coder step. If the orchestrator fails with an opaque coder error, first check the Claude CLI with these quick steps:
+
+- Verify the binary is installed and on your PATH:
+
+```bash
+command -v claude || which claude
+```
+
+- If the binary is present but runs into authentication errors, re-authenticate (for example):
+
+```bash
+claude login
+```
+
+- The orchestrator now performs a lightweight preflight before the coder runs. The preflight will exit early with a clear message when:
+  - the `claude` binary is not found in PATH, or
+  - the CLI is present but appears unauthenticated or otherwise unusable.
+
+If you still see problems, check `state/coder-error.json` and `state/log.jsonl` for more details.

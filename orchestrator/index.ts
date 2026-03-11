@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { runCoder } from '../src/coder';
 import { appendLog } from '../src/log';
 import { evaluateKillSwitch } from '../src/killSwitch';
@@ -98,6 +99,41 @@ function printCompactSummary(summary: any) {
   console.log('---');
 }
 
+function preflightClaude(): void {
+  try {
+    const res = spawnSync('claude', ['--version'], { encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024 });
+
+    if (res.error) {
+      // Missing binary
+      if ((res.error as any).code === 'ENOENT') {
+        console.error('Preflight failed: "claude" CLI not found in PATH. Install the Claude CLI and ensure it is available in your shell PATH.');
+        process.exit(1);
+      }
+      console.error(`Preflight failed: error executing "claude": ${(res.error as Error).message}`);
+      process.exit(1);
+    }
+
+    const stdout = (res.stdout || '').toString().toLowerCase();
+    const stderr = (res.stderr || '').toString().toLowerCase();
+
+    if (res.status !== 0) {
+      const authHints = ['login', 'authenticate', 'not logged', 'not authenticated', 'unauthorized', 'please login', 'no api key', 'unauth'];
+      if (authHints.some((h) => stdout.includes(h) || stderr.includes(h))) {
+        console.error('Preflight failed: "claude" CLI appears to be installed but not authenticated or not usable. Try running `claude login` or re-authenticating and then re-run this tool.');
+        process.exit(1);
+      }
+
+      console.error(`Preflight failed: "claude" CLI exited with code ${res.status}. stderr: ${res.stderr}`);
+      process.exit(1);
+    }
+
+    appendLog('preflight-claude-ok', { checkedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error(`Preflight failed: unexpected error while checking "claude": ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
 function main(): void {
   const inputArg = process.argv[2] ?? 'input/sample.json';
   const inputPath = path.resolve(inputArg);
@@ -131,6 +167,10 @@ function main(): void {
   });
 
   const researcherOutput = runResearcher(inputPath, runStatePath);
+
+  // Lightweight preflight to ensure the Claude CLI is present and appears usable.
+  preflightClaude();
+
   let coderOutput = runCoder(runStatePath);
   let reviewerOutput = runReviewer(runStatePath);
 
