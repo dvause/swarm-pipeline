@@ -1,0 +1,9 @@
+{
+  "type": "csv",
+  "source": "input/sample-players.csv",
+  "goal": "Generate a tiny runnable utility that analyzes this CSV and produces a useful summary report, plus README and case study.",
+  "notes": [
+    "Keep it single-file and zero-dependency if possible.",
+    "Optimize for a portfolio-quality artifact, not a toy hello-world script."
+  ]
+}
