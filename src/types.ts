@@ -90,3 +90,12 @@ export interface CoderOutput {
   caseStudy: string;
   grounding: CoderGrounding;
 }
+
+export interface CoderAttemptResult {
+  ok: boolean;
+  output?: CoderOutput;
+  error?: string;
+  stderr?: string;
+  stdoutPreview?: string;
+  exitCode?: number | null;
+}
