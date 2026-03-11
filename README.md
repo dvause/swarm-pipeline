@@ -23,3 +23,4 @@ npm run research -- input/sample.json
 - `output/<runId>/` — generated artifact, README, case study, and grounding metadata
 - `state/reviewer-output.json` — deterministic validation results for the latest run
 - `state/coder-prompt.json` / `state/coder-error.json` — coder diagnostics when Claude misbehaves
+- `output/<runId>/RUN_SUMMARY.json` — machine-readable run summary (status, per-step timing, artifacts, verdicts)

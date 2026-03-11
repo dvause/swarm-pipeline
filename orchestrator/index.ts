@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { runCoder } from '../src/coder';
 import { appendLog } from '../src/log';
@@ -6,6 +7,96 @@ import { runResearcher } from '../src/researcher';
 import { runReviewer } from '../src/reviewer';
 import { buildInitialRunState, readJsonFile, writeJsonFile } from '../src/state';
 import { InputSpec } from '../src/types';
+
+function buildRunSummary(runStatePath: string, researcherOutput: any, coderOutput: any, reviewerOutput: any) {
+  const runState = readJsonFile<any>(runStatePath);
+  const outputDir = path.resolve('output', runState.runId);
+  let producedFiles: string[] = [];
+
+  try {
+    if (fs.existsSync(outputDir)) {
+      producedFiles = fs.readdirSync(outputDir).map((f) => path.join('output', runState.runId, f));
+    }
+  } catch (err) {
+    producedFiles = [];
+  }
+
+  const startedAt = runState.startedAt;
+  const completedAt = runState.reviewer?.completedAt ?? runState.coder?.completedAt ?? new Date().toISOString();
+
+  function durationMs(start?: string | null, end?: string | null) {
+    if (!start) return null;
+    try {
+      const s = new Date(start).getTime();
+      const e = end ? new Date(end).getTime() : Date.now();
+      return Math.max(0, e - s);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  const summary: any = {
+    runId: runState.runId,
+    input: {
+      inputPath: runState.inputPath,
+    },
+    overall: {
+      status: runState.pipeline.status,
+      startedAt: startedAt,
+      completedAt: completedAt,
+      durationMs: durationMs(startedAt, completedAt),
+      totalCostUsd: runState.pipeline.totalCostUsd
+    },
+    steps: {
+      researcher: {
+        status: runState.researcher.status,
+        startedAt: runState.researcher.startedAt,
+        completedAt: runState.researcher.completedAt,
+        durationMs: durationMs(runState.researcher.startedAt, runState.researcher.completedAt),
+        error: runState.researcher.error ?? null
+      },
+      coder: {
+        status: runState.coder.status,
+        startedAt: runState.coder.startedAt,
+        completedAt: runState.coder.completedAt,
+        durationMs: durationMs(runState.coder.startedAt, runState.coder.completedAt),
+        retryCount: runState.coder.retryCount ?? 0,
+        error: runState.coder.error ?? null,
+        artifactFilename: coderOutput?.artifactFilename ?? null
+      },
+      reviewer: {
+        status: runState.reviewer.status,
+        startedAt: runState.reviewer.startedAt,
+        completedAt: runState.reviewer.completedAt,
+        durationMs: durationMs(runState.reviewer.startedAt, runState.reviewer.completedAt),
+        passed: runState.reviewer.passed ?? reviewerOutput?.passed ?? false,
+        score: runState.reviewer.score ?? reviewerOutput?.score ?? null,
+        issues: runState.reviewer.issues ?? reviewerOutput?.issues ?? []
+      }
+    },
+    producedFiles,
+    failureReason: runState.killSwitch?.triggered ? runState.killSwitch.reason : (runState.reviewer?.error || runState.coder?.error || null)
+  };
+
+  return summary;
+}
+
+function printCompactSummary(summary: any) {
+  console.log('--- RUN SUMMARY ---');
+  console.log(`runId: ${summary.runId}`);
+  console.log(`status: ${summary.overall.status}`);
+  console.log(`startedAt: ${summary.overall.startedAt}`);
+  console.log(`completedAt: ${summary.overall.completedAt}`);
+  const dur = summary.overall.durationMs;
+  console.log(`durationMs: ${dur !== null ? dur : 'n/a'}`);
+  console.log(`researcher: ${summary.steps.researcher.status} (${summary.steps.researcher.durationMs ?? 'n/a'}ms)`);
+  console.log(`coder: ${summary.steps.coder.status} (retries: ${summary.steps.coder.retryCount})`);
+  console.log(`reviewer: ${summary.steps.reviewer.status} (passed: ${summary.steps.reviewer.passed}, score: ${summary.steps.reviewer.score})`);
+  console.log(`artifact: ${summary.steps.coder.artifactFilename ?? 'n/a'}`);
+  console.log(`producedFiles: ${summary.producedFiles.length}`);
+  if (summary.failureReason) console.log(`failureReason: ${summary.failureReason}`);
+  console.log('---');
+}
 
 function main(): void {
   const inputArg = process.argv[2] ?? 'input/sample.json';
@@ -55,6 +146,16 @@ function main(): void {
     coderOutput = runCoder(runStatePath, reviewerOutput.issues);
     reviewerOutput = runReviewer(runStatePath);
   }
+
+  // Build and write a machine-readable summary artifact
+  const summary = buildRunSummary(runStatePath, researcherOutput, coderOutput, reviewerOutput);
+  const outDir = path.resolve('output', summary.runId);
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(path.join(outDir, 'RUN_SUMMARY.json'), JSON.stringify(summary, null, 2) + '\n');
+  appendLog('run-summary-written', { runId: summary.runId, path: path.join('output', summary.runId, 'RUN_SUMMARY.json') });
+
+  // Print compact human-readable summary
+  printCompactSummary(summary);
 
   console.log(`Bootstrapped ${state.runId}`);
   console.log(`Input type: ${input.type}`);
