@@ -1,0 +1,9 @@
+{
+  "type": "prompt",
+  "source": "internal",
+  "goal": "Create a minimal data-utility script that reads a CSV and prints a one-line summary.",
+  "notes": [
+    "Prefer single-file, zero-dependency script",
+    "Focus on clear run instructions"
+  ]
+}

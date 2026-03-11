@@ -23,3 +23,15 @@ npm run research -- input/sample.json
 - `output/<runId>/` — generated artifact, README, case study, and grounding metadata
 - `state/reviewer-output.json` — deterministic validation results for the latest run
 - `state/coder-prompt.json` / `state/coder-error.json` — coder diagnostics when Claude misbehaves
+
+## Evals
+
+A small deterministic eval suite is included under `evals/fixtures` with a lightweight runner script.
+
+Run the evals:
+
+```bash
+npm run evals
+```
+
+The runner will execute the researcher step, inject a small deterministic artifact into `output/<runId>/`, then run the reviewer checks and print a compact pass/fail summary for each fixture.

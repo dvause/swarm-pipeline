@@ -1,0 +1,9 @@
+{
+  "type": "spec",
+  "source": "internal/config-spec",
+  "goal": "Produce a small script that validates a CSV against a simple spec and reports basic stats.",
+  "notes": [
+    "This is an evaluative spec-driven run",
+    "Keep artifact script small and testable"
+  ]
+}

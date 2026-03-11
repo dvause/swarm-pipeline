@@ -8,7 +8,8 @@
     "check": "tsc --noEmit",
     "research": "ts-node agents/researcher/index.ts",
     "codegen": "ts-node -e \"require('./src/coder').runCoder()\"",
-    "review": "ts-node agents/reviewer/index.ts"
+    "review": "ts-node agents/reviewer/index.ts",
+    "evals": "ts-node scripts/run-evals.ts"
   },
   "keywords": [],
   "author": "",
