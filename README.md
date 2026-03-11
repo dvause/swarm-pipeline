@@ -46,3 +46,15 @@ claude login
   - the CLI is present but appears unauthenticated or otherwise unusable.
 
 If you still see problems, check `state/coder-error.json` and `state/log.jsonl` for more details.
+
+## Evals
+
+A small deterministic eval suite is included under `evals/fixtures` with a lightweight runner script.
+
+Run the evals:
+
+```bash
+npm run evals
+```
+
+The runner will execute the researcher step, inject a small deterministic artifact into `output/<runId>/`, then run the reviewer checks and print a compact pass/fail summary for each fixture.
